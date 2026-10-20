@@ -1,0 +1,1 @@
+Hello. This is a demonstration of speech generated from a reference recording. The words are new, while the voice is guided by the audio samples.
