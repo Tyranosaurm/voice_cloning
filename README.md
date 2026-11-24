@@ -29,6 +29,35 @@ CPU inference is supported but can be slow. CUDA requires an NVIDIA GPU and a
 compatible driver. This script selects CUDA when available, otherwise CPU;
 Apple Silicon uses CPU here. FFmpeg is also used by the audio decoding stack.
 
+### Optional local web interface
+
+After installing the hardware-appropriate Torch packages above, install the
+optional interface dependencies and launch the app:
+
+```bash
+python -m pip install -r requirements-ui.txt
+python app.py
+```
+
+Open `http://127.0.0.1:7860` in your browser. The app listens locally and does
+not create a public sharing link by default. Use `--host` and `--port` to
+choose a different listening address or port, for example
+`python app.py --port 7861`.
+
+Upload your recordings, choose the start offset and clip duration, and prepare
+the reference WAVs. Preview the prepared clips before reusing them in the
+speech-generation controls. Enter text in the multiline editor, choose a
+language, device, and seed, and enable the long-text controls when needed.
+The generated WAV can be played in the app and downloaded.
+Download files you want to keep before closing the app; its work directory is
+temporary. Long-text chunking is enabled by default in the interface and can
+be switched off in Generation settings.
+
+Launching the interface does not load or download XTTS. The first generation
+loads the model and may download its weights. Review the model terms below;
+they are not accepted automatically. The CLI workflow in the following
+sections remains available.
+
 ## 2. Select recordings
 
 Start with one to three clean clips of roughly 6–15 seconds each. This is a
@@ -69,11 +98,38 @@ automatically. Subsequent runs use the cached model. Reference audio is used
 by local inference; no hosted speech API is called by this script.
 
 Use `--device cpu` or `--device cuda` to override automatic selection.
-Sentence splitting is enabled. For long narration, generate a paragraph at a
-time and listen for missing words, repetitions, and changes in delivery.
-Very long unpunctuated sentences may exceed model limits; break them up.
+Sentence splitting is enabled. The default command generates speech in one
+model call, as before.
 An unchanged seed helps comparisons but does not guarantee identical output
 across hardware or software versions.
+
+### Long narration
+
+Add `--chunk-chars` to generate a longer script as smaller chunks and combine
+them into one WAV:
+
+```bash
+python voice.py synthesize --refs references/ref_01.wav --text-file example.txt --language en --chunk-chars 200 --pause-ms 200 --output output/narration.wav
+```
+
+`--chunk-chars` must be a positive integer. Blank lines start new chunks;
+within each paragraph, whitespace is normalized and splitting prefers sentence
+boundaries, then word boundaries. An unbroken string longer than the limit is
+split at the character limit. The model loads once for the run, and progress is
+reported for each chunk. Each generated chunk still uses the model's sentence
+splitting. A character limit is only a heuristic: model token limits vary by
+language, so reduce `--chunk-chars` if a passage still exceeds them.
+
+`--pause-ms` adds silence between every chunk, with no added silence at the
+beginning or end. It defaults to 200 milliseconds when chunking is enabled;
+use `--pause-ms 0` to disable added pauses. It must be a nonnegative integer
+and requires `--chunk-chars`. The final WAV is saved only after all chunks
+have been generated and validated successfully. Existing output files are
+not overwritten.
+
+Listen through the assembled narration for missing words, repetitions, abrupt
+transitions, and changes in delivery. Chunking does not guarantee consistent
+voice quality across a long passage.
 
 ## 5. Evaluate and improve
 
@@ -91,6 +147,24 @@ These requirements specify a package version range, not a fully locked and
 end-to-end certified environment. No user audio was supplied when this package
 was created. CLI parsing, conversion, and invalid-input handling were checked;
 model download, inference, GPU compatibility, and voice quality were not tested.
+
+## Tests
+
+Run the standard-library test suite from the project directory:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The tests use generated WAV fixtures and a fake speech backend; they do not
+require model downloads or the inference dependencies. They check text
+chunking, WAV assembly, and synthesis workflow behavior. They do not evaluate
+actual XTTS inference or voice quality.
+
+The interface was also checked with Gradio 6.32.0 in a desktop and mobile
+browser layout: uploads, FFmpeg preparation, reference reuse, WAV downloads,
+settings, and validation messages. Those checks used a generated test tone,
+not speaker recordings or real model inference.
 
 ## Optional fine-tuning
 
